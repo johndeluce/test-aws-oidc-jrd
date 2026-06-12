@@ -1,0 +1,45 @@
+name: Test AWS OIDC
+
+on:
+  workflow_dispatch:  # Manual trigger
+
+permissions:
+  id-token: write  # Required for OIDC
+  contents: read
+
+jobs:
+  test:
+    name: Test AWS Authentication
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: GitHubActions-Test
+          aws-region: us-east-1
+      
+      - name: Test AWS access
+        run: |
+          echo "Testing AWS authentication..."
+          aws sts get-caller-identity | tee caller-identity.json
+          
+      - name: List EC2 instances
+        run: |
+          echo "Listing EC2 instances..."
+          aws ec2 describe-instances \
+            --query 'Reservations[*].Instances[*].[InstanceId,State.Name,Tags[?Key==`Name`].Value|[0]]' \
+            --output table | tee ec2-instances.txt
+      
+      - name: Upload AWS verification artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: aws-oidc-verification
+          path: |
+            caller-identity.json
+            ec2-instances.txt
+          retention-days: 7
